@@ -1,4 +1,4 @@
-# ihaskell-pwd
+# TODO below is just a text copied from ihaskell-pwd temlplate
 A pwd directory template for the [crosscompass/ihaskell-notebook](https://github.com/jamesdbrock/ihaskell-notebook) docker image
 with some utility shell scripts.
 
