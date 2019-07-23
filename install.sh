@@ -4,7 +4,7 @@
 # if you have more than one packages encose them in quotes
 # e.g., DEPS="unbound-generics arrow-extras"
 
-DEPS=unbound-generics
+DEPS="unbound-generics uglymemo lens data-partition tree-view"
 
 if [ -d "/opt/stack/snapshots" ]; then
 	if [ -d ".snapshots" ]; then
