@@ -2,7 +2,7 @@
 
 # specify space sparated list of packages you need here
 
-DEPS="unbound-generics tree-view"
+DEPS="unbound-generics tree-view data-partition uglymemo lens"
 
 if [ -d "/opt/stack/snapshots" ]; then
 	if [ -d ".snapshots" -a -d ".stack-work" ]; then
