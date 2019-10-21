@@ -1,5 +1,9 @@
 # How to run this repo
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/kyagrd/ihaskell-picalc/master?urlpath=lab)
+[![NBviewer](./nbviewer_badge.svg)](https://nbviewer.jupyter.org/github/kyagrd/ihaskell-picalc/tree/master/)
+
+
 Should have access to a system where you can run Docker images.
 
 FYI, on Debian or Ubuntu, you can use the following command to install and activate docker
