@@ -22,7 +22,8 @@ extrudesB (DnB (Var x')) x = x==x'
 -- one :: (Fresh m, Alternative m, MonadFail m) => Pr -> m (Act, Pr)
 one (Out x y p)    = return (Up x y, p)
 one (TauP p)       = return (Tau, p)
-one (Match x y p)  | x == y = one p
+one (Match x y p)  = do  guard $ x == y
+                         one p
 one (Plus p q) = one p <|> one q
 one (Par p q)
   =    do  (l, p') <- one p;  return (l, Par p' q)
@@ -45,7 +46,8 @@ one _       = empty
 
 -- oneb :: (Fresh m, Alternative m, MonadFail m) => Pr -> m (ActB, PrB)
 oneb (In x p)      = return (DnB x, p)
-oneb (Match x y p) | x == y = oneb p
+oneb (Match x y p) = do  guard $ x == y
+                         oneb p
 oneb (Plus p q)  = oneb p <|> oneb q
 oneb (Par p q)   =     do  (l,(x,p')) <- oneb' p;  return (l, x.\Par p' q)
                  <|>   do  (l,(x,q')) <- oneb' q;  return (l, x.\Par p q')
