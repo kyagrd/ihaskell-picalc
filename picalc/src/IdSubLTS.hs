@@ -8,9 +8,19 @@
 module IdSubLTS where
 import           Control.Applicative
 import           Control.Monad
+import           Control.Monad.Trans.Identity
 import           Control.Monad.Fail
 import           PiCalc
 import           Unbound.Generics.LocallyNameless
+{-
+class (Eq a,Monad m) => Constraint m a where
+  (==.) :: a -> a -> m ()
+  x ==. y  =  guard $ x== y
+  (/=.) :: a -> a -> m ()
+
+infix 4 ==.
+infix 4 /=.
+-}
 
 interactsB (UpB x) (DnB x') = x==x'
 interactsB (DnB x) (UpB x') = x==x'
@@ -22,7 +32,8 @@ extrudesB (DnB (Var x')) x = x==x'
 -- one :: (Fresh m, Alternative m, MonadFail m) => Pr -> m (Act, Pr)
 one (Out x y p)    = return (Up x y, p)
 one (TauP p)       = return (Tau, p)
-one (Match x y p)  | x == y = one p
+one (Match x y p)  = do  guard $ x == y
+                         one p
 one (Plus p q) = one p <|> one q
 one (Par p q)
   =    do  (l, p') <- one p;  return (l, Par p' q)
