@@ -9,7 +9,7 @@
 FROM crosscompass/ihaskell-notebook:e763dc764d90
 
 USER root
-
+RUN jupyter labextension install @jupyterlab/katex-extension
 RUN mkdir /home/$NB_USER/picalc
 COPY *.ipynb /home/$NB_USER/picalc/
 RUN chown --recursive $NB_UID:users /home/$NB_USER/picalc
