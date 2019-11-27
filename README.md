@@ -3,8 +3,10 @@
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/kyagrd/ihaskell-picalc/master?urlpath=lab)
 [![NBviewer](./nbviewer_badge.svg)](https://nbviewer.jupyter.org/github/kyagrd/ihaskell-picalc/tree/master/)
 
+The quickest way to try our system is clicking the Binder button above, which runs the Docker image of our repository on the cloud.
 
-Should have access to a system where you can run Docker images.
+For better performance, you can also run the Docker image on your machine locally
+if you can run Docker in your machine.
 
 FYI, on Debian or Ubuntu, you can use the following command to install and activate docker
 ```bash
