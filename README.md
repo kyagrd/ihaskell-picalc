@@ -20,14 +20,6 @@ sudo adduser $(whoami) docker   # may need re-login after this
 Once you have Docker, you can simply `./run.sh` to run the Jupyter server equipped with IHaskell in a docker container.
 On first run, it would take some time to pull the docker image from the Internet. You need about 10GB (not mor though) of disk space for this iamge. After the server is successfullly launched, you can connect to the IP address of the machine that is running the Docker image on port 8888. So, if you are running it on your local machine, it would be `localhost:8888`; and if you are running it on a yet another layer of virtualized environment (e.g. linux installed via WSL2 on Windows 10), then you should connect to that IP adresss's port 8888. The token you should input to Log-in is `x`. Then, the Jupyter will list some directories including `picalc`. Go inside `picalc` and click on `PiCalcOpenBisim.ipynb`.
 
-Jupyter Lab's default renderer MathJaX is painfully slow. There is a official KaTeX plugin for Jupyter Lab.
-You can install this winthin Jupypter lab like this:
-  * On the menu, Settings / Enable Extension Manager (experimental)
-  * Enabling this menu item will show a new extension manager item in the Left Sideebar
-  * In the extension manager, search for katex, and install `@jupyterlab/katex-extension`
-  * When installation is done, Jupyter will as you. Click the Reload button.
-  * Now you get a much faster LaTeX renderer.
-
 # Below is a copy of the README.md from ihaskell-pwd temlplate
 A pwd directory template for the [crosscompass/ihaskell-notebook](https://github.com/jamesdbrock/ihaskell-notebook) docker image
 with some utility shell scripts.
