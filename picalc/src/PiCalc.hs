@@ -8,8 +8,6 @@
 
 module PiCalc where
 import GHC.Generics (Generic)
-import Data.Maybe
-import Data.List
 import Unbound.Generics.LocallyNameless
 
 type Nm = Name Tm
