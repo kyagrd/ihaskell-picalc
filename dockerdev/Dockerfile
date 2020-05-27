@@ -3,18 +3,43 @@
 # Test this Dockerfile:
 #
 #     docker build -t ihaskell-picalc .
-#     docker run --rm -p 8888:8888 --name learn-you-a-haskell --env JUPYTER_TOKEN=x ihaskell-picalc:latest
+#     docker run --rm -p 8888:8888 --name ihaskell-notebook --env JUPYTER_TOKEN=x ihaskell-picalc:latest
 #
 
-FROM crosscompass/ihaskell-notebook:e763dc764d90
+# FROM crosscompass/ihaskell-notebook:e763dc764d90
+FROM crosscompass/ihaskell-notebook:fb96a81230df
 
 USER root
 RUN jupyter labextension install @jupyterlab/katex-extension
-RUN stack install unbound-generics tree-view data-partition uglymemo lens
 RUN mkdir /home/$NB_USER/picalc
 COPY *.ipynb /home/$NB_USER/picalc/
-RUN chown --recursive $NB_UID:users /home/$NB_USER/picalc
-
-USER $NB_UID
+RUN fix-permissions /home/$NB_USER/picalc
+COPY global-project.stack.yaml $STACK_ROOT/global-project/stack.yaml
+RUN stack install unbound-generics uglymemo lens tree-view data-partition \
+ && stack build $STACK_ARGS ihaskell \
+ && stack build $STACK_ARGS ghc-parser \
+ && stack build $STACK_ARGS ipython-kernel \
+ ## ihaskell-display
+ && stack build $STACK_ARGS ihaskell-aeson \
+ && stack build $STACK_ARGS ihaskell-blaze \
+ && stack build $STACK_ARGS ihaskell-charts \
+ && stack build $STACK_ARGS ihaskell-diagrams \
+ && stack build $STACK_ARGS ihaskell-gnuplot \
+ && stack build $STACK_ARGS ihaskell-graphviz \
+ && stack build $STACK_ARGS ihaskell-hatex \
+ && stack build $STACK_ARGS ihaskell-juicypixels \
+# && stack build $STACK_ARGS ihaskell-magic \
+# && stack build $STACK_ARGS ihaskell-plot \
+# && stack build $STACK_ARGS ihaskell-rlangqq \
+# && stack build $STACK_ARGS ihaskell-static-canvas \
+# Skip install of ihaskell-widgets, they don't work.
+# See https://github.com/gibiansky/IHaskell/issues/870
+# && stack build $STACK_ARGS ihaskell-widgets \
+ && stack build $STACK_ARGS hvega \
+ && stack build $STACK_ARGS ihaskell-hvega \
+ && fix-permissions $STACK_ROOT \
+ && chown --recursive $NB_USER:users $STACK_ROOT \
+ && chown --recursive $NB_USER:users /opt/IHaskell \
+ && chown --recursive $NB_USER:users /opt/hvega
 
 ENV JUPYTER_ENABLE_LAB=yes
