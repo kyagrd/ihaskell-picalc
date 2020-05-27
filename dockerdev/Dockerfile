@@ -3,7 +3,7 @@
 # Test this Dockerfile:
 #
 #     docker build -t ihaskell-picalc .
-#     docker run --rm -p 8888:8888 --name ihaskell-notebook --env JUPYTER_TOKEN=x ihaskell-picalc:latest
+#     docker run --rm -p 8888:8888 --name ihaskell_notebook --env JUPYTER_TOKEN=x ihaskell-picalc:latest
 #
 
 # FROM crosscompass/ihaskell-notebook:e763dc764d90
