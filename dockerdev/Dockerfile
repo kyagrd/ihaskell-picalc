@@ -41,4 +41,6 @@ RUN stack install unbound-generics uglymemo lens tree-view data-partition \
  && fix-permissions /opt/IHaskell \
  && fix-permissions /opt/hvega
 
+USER $NB_UID
+
 ENV JUPYTER_ENABLE_LAB=yes
