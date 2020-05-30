@@ -37,9 +37,8 @@ RUN stack install unbound-generics uglymemo lens tree-view data-partition \
 # && stack build $STACK_ARGS ihaskell-widgets \
  && stack build $STACK_ARGS hvega \
  && stack build $STACK_ARGS ihaskell-hvega \
- && fix-permissions $STACK_ROOT \
- && chown --recursive $NB_USER:users $STACK_ROOT \
- && chown --recursive $NB_USER:users /opt/IHaskell \
- && chown --recursive $NB_USER:users /opt/hvega
+ && fix-permissions $STACK_ROOT/global-project \
+ && fix-permissions /opt/IHaskell \
+ && fix-permissions /opt/hvega
 
 ENV JUPYTER_ENABLE_LAB=yes
