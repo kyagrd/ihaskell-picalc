@@ -12,7 +12,7 @@ if you can run Docker in your machine.
 FYI, on Debian or Ubuntu, you can use the following command to install and activate docker
 ```bash
 sudo apt-get update -y
-sudo apt-get install docker.io
+sudo apt-get install docker-ce
 sudo service docker start
 sudo adduser $(whoami) docker   # may need re-login after this
 ```
