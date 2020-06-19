@@ -6,14 +6,15 @@
 #     docker run --rm -p 8888:8888 --name ihaskell_notebook --env JUPYTER_TOKEN=x ihaskell-picalc:latest
 #
 
-# FROM crosscompass/ihaskell-notebook:e763dc764d90
-FROM crosscompass/ihaskell-notebook:fb96a81230df
+FROM crosscompass/ihaskell-notebook:8b7eb58cec8d
 
 USER root
 RUN jupyter labextension install @jupyterlab/katex-extension
 RUN mkdir /home/$NB_USER/picalc
 COPY *.ipynb /home/$NB_USER/picalc/
 RUN fix-permissions /home/$NB_USER/picalc
+
+USER $NB_UID
 COPY global-project.stack.yaml $STACK_ROOT/global-project/stack.yaml
 RUN stack install unbound-generics uglymemo lens tree-view data-partition \
  && stack build $STACK_ARGS ihaskell \
@@ -36,11 +37,6 @@ RUN stack install unbound-generics uglymemo lens tree-view data-partition \
 # See https://github.com/gibiansky/IHaskell/issues/870
 # && stack build $STACK_ARGS ihaskell-widgets \
  && stack build $STACK_ARGS hvega \
- && stack build $STACK_ARGS ihaskell-hvega \
- && fix-permissions $STACK_ROOT/global-project \
- && fix-permissions /opt/IHaskell \
- && fix-permissions /opt/hvega
-
-USER $NB_UID
+ && stack build $STACK_ARGS ihaskell-hvega
 
 ENV JUPYTER_ENABLE_LAB=yes
