@@ -23,9 +23,12 @@ dependencies:
 - base >= 4.7 && < 5
 - unbound-generics
 - lens
+- uglymemo
 - containers
 - transformers
 - data-partition
+- tree-view
+- bimap
 
 library:
   source-dirs: src

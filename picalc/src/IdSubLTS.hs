@@ -13,10 +13,11 @@ import           Control.Monad.Fail
 import           PiCalc
 import           Unbound.Generics.LocallyNameless
 {-
-class (Eq a,Monad m) => Constraint m a where
+class (Eq a, m) => Constraint m a where
   (==.) :: a -> a -> m ()
-  x ==. y  =  guard $ x== y
+  x ==. y  =  guard $ x == y
   (/=.) :: a -> a -> m ()
+  x /=. y  =  guard $ x /= y
 
 infix 4 ==.
 infix 4 /=.
