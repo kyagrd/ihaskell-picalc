@@ -1,79 +1,79 @@
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE UndecidableInstances      #-}
 
 module IdSubLTS where
-import           Control.Applicative
-import           Control.Monad
-import           Control.Monad.Trans.Identity
-import           Control.Monad.Fail
-import           PiCalc
-import           Unbound.Generics.LocallyNameless
-{-
-class (Eq a, m) => Constraint m a where
-  (==.) :: a -> a -> m ()
-  x ==. y  =  guard $ x == y
-  (/=.) :: a -> a -> m ()
-  x /=. y  =  guard $ x /= y
 
-infix 4 ==.
-infix 4 /=.
--}
+import Control.Applicative
+import Control.Lens.Fold
+import Control.Monad
+import Control.Monad.Fail
+import Control.Monad.Trans.Identity
+import PiCalc
+import Unbound.Generics.LocallyNameless hiding (fv)
+import qualified Unbound.Generics.LocallyNameless as U
 
-interactsB (UpB x) (DnB x') = x==x'
-interactsB (DnB x) (UpB x') = x==x'
-interactsB _       _        = False
 
-extrudesB (UpB (Var x')) x = x==x'
-extrudesB (DnB (Var x')) x = x==x'
+fv = toListOf U.fv
+
+interactsB (UpB x) (DnB x') = x == x'
+interactsB (DnB x) (UpB x') = x == x'
+interactsB _ _ = False
 
 -- one :: (Fresh m, Alternative m, MonadFail m) => Pr -> m (Act, Pr)
-one (Out x y p)    = return (Up x y, p)
-one (TauP p)       = return (Tau, p)
-one (Match x y p)  = do  guard $ x == y
-                         one p
+one (Out x y p) = return (Up x y, p)
+one (TauP p)    = return (Tau, p)
+one (Match x y p) =
+      do guard $ x == y
+         one p
 one (Plus p q) = one p <|> one q
 one (Par p q)
-  =    do  (l, p') <- one p;  return (l, Par p' q)
-  <|>  do  (l, q') <- one q;  return (l, Par p q')
-  <|>  do  (lp, bp) <- oneb p;  (lq, bq) <- oneb q
-           guard $ interactsB lp lq             -- close
-           (y, p', q') <- unbind2' bp bq
-           return (Tau, Nu(y.\Par p' q'))
-  <|>  do  (Up x v, p') <- one p;  (DnB x', (y,q')) <- oneb' q
-           guard $ x == x'
-           return (Tau, Par p' (subst y v q'))  -- interaction
-  <|>  do  (DnB x', (y,p')) <- oneb' p;  (Up x v, q') <- one q
-           guard $ x == x'
-           return (Tau, Par (subst y v p') q')  -- interaction
-one (Nu b)  = do  (x,p) <- unbind b
-                  (l@(Up (Var x') (Var y)), p') <- one p
-                  guard $ x /= x' && x /= y 
-                  return (l, Nu (x.\p'))
-one _       = empty
+    = do (l, p') <- one p; return (l, Par p' q)
+  <|> do (l, q') <- one q; return (l, Par p q')
+  <|> do (lp, bp) <- oneb p
+         (lq, bq) <- oneb q
+         guard $ interactsB lp lq -- close
+         (y, p', q') <- unbind2' bp bq
+         return (Tau, Nu (y .\ Par p' q'))
+  <|> do (Up x v, p') <- one p
+         (DnB x', (y, q')) <- oneb' q
+         guard $ x == x'
+         return (Tau, Par p' (subst y v q')) -- interaction
+  <|> do (DnB x', (y, p')) <- oneb' p
+         (Up x v, q') <- one q
+         guard $ x == x'
+         return (Tau, Par (subst y v p') q') -- interaction
+one (Nu b) =
+      do (x, p) <- unbind b
+         (l, p') <- one p
+         guard $ x `notElem` fv l
+         return (l, Nu (x .\ p'))
+one _ = empty
 
 -- oneb :: (Fresh m, Alternative m, MonadFail m) => Pr -> m (ActB, PrB)
-oneb (In x p)      = return (DnB x, p)
-oneb (Match x y p) = do  guard $ x == y
-                         oneb p
-oneb (Plus p q)  = oneb p <|> oneb q
-oneb (Par p q)   =     do  (l,(x,p')) <- oneb' p;  return (l, x.\Par p' q)
-                 <|>   do  (l,(x,q')) <- oneb' q;  return (l, x.\Par p q')
-oneb (Nu b)      =     do  (x,p) <- unbind b
-                           (l,(y,p')) <- oneb' p
-                           guard $ not (l `extrudesB` x)
-                           return (l, y.\Nu (x.\p'))
-                 <|>   do  (x,p) <- unbind b
-                           (Up l@(Var y) (Var x'),p') <- one p
-                           guard $ x == x' && x /= y
-                           return (UpB l, x.\p')  -- open
-oneb _           = empty
+oneb (In x p) = return (DnB x, p)
+oneb (Match x y p) =
+      do guard $ x == y
+         oneb p
+oneb (Plus p q) = oneb p <|> oneb q
+oneb (Par p q)
+    = do (l, (x, p')) <- oneb' p; return (l, x .\ Par p' q)
+  <|> do (l, (x, q')) <- oneb' q; return (l, x .\ Par p q')
+oneb (Nu b)
+    = do (x, p) <- unbind b
+         (l, (y, p')) <- oneb' p
+         guard $ x `notElem` fv l
+         return (l, y .\ Nu (x .\ p'))
+  <|> do (x, p) <- unbind b
+         (l@(Up (Var y) (Var x')), p') <- one p
+         guard $ x /= y && x == x'
+         return (UpB (Var y), x .\ p') -- open
+oneb _ = empty
 
-oneb' p = do (l,b) <- oneb p; r <- unbind b; return (l,r)
-
+oneb' p = do (l, b) <- oneb p; r <- unbind b; return (l, r)
 {-
 % Finite pi-calculus specification in lambda-Prolog
 % A specification of the late transition system for the finite pi calculus.
