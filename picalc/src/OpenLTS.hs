@@ -19,7 +19,6 @@ import Data.List
 import qualified Data.Set as S
 import Data.Maybe
 import qualified Data.Partition as P
-import Data.Bimap hiding (empty,map)
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
 import qualified Unbound.Generics.LocallyNameless as U
@@ -43,7 +42,7 @@ instance Subst Tm Quan
 type Constraint = Partition Int
 
 part2NmSets sigma = do
-  xs <- reversedCtx
+  xs <- reversedCtxNames
   return $ S.map (xs!!) <$> P.nontrivialSets sigma
 
 respects :: Constraint -> [Int] -> Bool
@@ -54,10 +53,12 @@ respectful sigma =
      guard $ respects sigma ns
      return sigma
 
-reversedCtx = asks $ reverse . map quan2nm
+reversedCtxNames = reverse <$> ctxNames
+
+ctxNames = asks (map quan2nm)
 
 indexNm :: Monad m => Nm -> ReaderT Ctx m Int
-indexNm x = fromJust . elemIndex x <$> reversedCtx
+indexNm x = fromJust . elemIndex x <$> reversedCtxNames
 
 -- error when x is not in ctx
 -- calling reverse every time is not efficient - refactor later
@@ -91,10 +92,16 @@ interactsB _ _ = empty
 
 extendCtx = (:)
 
+subs ctx sigma = substs [(x, Var y) | i <-[0..length ns-1],
+                                       let x = ns !! i,
+                                       let y = ns !! P.rep sigma i ]
+  where ns = reverse . map quan2nm $ ctx
+      
+
 one (Out x y p) = return (P.empty,(Up x y,p))
 one (TauP p)    = return (P.empty,(Tau,p))
-one (Match x y p)
-    = do sigmaxy <- joinTm x y
+one (Match x y p) =
+      do sigmaxy <- joinTm x y
          (sigma,r) <- one p
          sigma' <- joinParts [sigmaxy,sigma]
          return (sigma',r)
@@ -118,8 +125,8 @@ one (Par p q) =
          sigma <- joinTm x x'
          sigma' <- joinParts [sigma,sigma_p,sigma_q]
          return (sigma',(Tau,Par (subst y v p') q'))  -- interaction
-one (Nu b)
-    = do (x,p) <- unbind b
+one (Nu b) =
+      do (x,p) <- unbind b
          (sigma,(l,p')) <- local (extendCtx (Nab x)) $
             do ret@(sigma,(l,p')) <- one p
                notElemWith sigma x (fv l)
@@ -128,17 +135,17 @@ one (Nu b)
 one _ = empty
 
 oneb (In x p) = return (P.empty,(DnB x,p))
-oneb (Match x y p)
-    = do sigmaxy <- joinTm x y
+oneb (Match x y p) =
+      do sigmaxy <- joinTm x y
          (sigma,r) <- oneb p
          sigma' <- joinParts [sigmaxy,sigma]
          return (sigma',r)
 oneb (Plus p q) = oneb p <|> oneb q
-oneb (Par p q)
-    = do (sigma,(l,(x,p'))) <- oneb' p; return (sigma,(l,x .\ Par p' q))
+oneb (Par p q) =
+      do (sigma,(l,(x,p'))) <- oneb' p; return (sigma,(l,x .\ Par p' q))
   <|> do (sigma,(l,(x,q'))) <- oneb' q; return (sigma,(l,x .\ Par p q'))
-oneb (Nu b)
-    = do (x,p) <- unbind b
+oneb (Nu b) =
+      do (x,p) <- unbind b
          (sigma,(l,(y,p'))) <- local (extendCtx (Nab x)) $
            do ret@(sigma,(l,r)) <- oneb' p
               notElemWith sigma x (fv l)

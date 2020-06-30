@@ -28,7 +28,7 @@ dependencies:
 - transformers
 - data-partition
 - tree-view
-- bimap
+# - bimap
 
 library:
   source-dirs: src

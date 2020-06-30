@@ -23,15 +23,15 @@ interactsB (UpB x) (DnB x') = x == x'
 interactsB (DnB x) (UpB x') = x == x'
 interactsB _ _ = False
 
--- one :: (Fresh m, Alternative m, MonadFail m) => Pr -> m (Act, Pr)
+one :: (Alternative m, Fresh m, MonadFail m) => Pr -> m (Act,Pr)
 one (Out x y p) = return (Up x y, p)
 one (TauP p)    = return (Tau, p)
 one (Match x y p) =
       do guard $ x == y
          one p
 one (Plus p q) = one p <|> one q
-one (Par p q)
-    = do (l, p') <- one p; return (l, Par p' q)
+one (Par p q) =
+      do (l, p') <- one p; return (l, Par p' q)
   <|> do (l, q') <- one q; return (l, Par p q')
   <|> do (lp, bp) <- oneb p
          (lq, bq) <- oneb q
@@ -53,17 +53,17 @@ one (Nu b) =
          return (l, Nu (x .\ p'))
 one _ = empty
 
--- oneb :: (Fresh m, Alternative m, MonadFail m) => Pr -> m (ActB, PrB)
+oneb :: (Alternative m, Fresh m, MonadFail m) => Pr -> m (ActB, PrB)
 oneb (In x p) = return (DnB x, p)
 oneb (Match x y p) =
       do guard $ x == y
          oneb p
 oneb (Plus p q) = oneb p <|> oneb q
-oneb (Par p q)
-    = do (l, (x, p')) <- oneb' p; return (l, x .\ Par p' q)
+oneb (Par p q) =
+      do (l, (x, p')) <- oneb' p; return (l, x .\ Par p' q)
   <|> do (l, (x, q')) <- oneb' q; return (l, x .\ Par p q')
-oneb (Nu b)
-    = do (x, p) <- unbind b
+oneb (Nu b) =
+      do (x, p) <- unbind b
          (l, (y, p')) <- oneb' p
          guard $ x `notElem` fv l
          return (l, y .\ Nu (x .\ p'))
