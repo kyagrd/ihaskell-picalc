@@ -16,6 +16,7 @@ import Control.Monad.Fail
 import Control.Monad.Trans.Reader
 import Data.Partition hiding (empty,rep)
 import Data.List
+import qualified Data.Set as S
 import Data.Maybe
 import qualified Data.Partition as P
 import Data.Bimap hiding (empty,map)
@@ -41,6 +42,10 @@ instance Subst Tm Quan
 
 type Constraint = Partition Int
 
+part2NmSets sigma = do
+  xs <- reversedCtx
+  return $ S.map (xs!!) <$> P.nontrivialSets sigma
+
 respects :: Constraint -> [Int] -> Bool
 respects part ns = (P.rep part <$> ns) == ns -- ns - indices of Nab names
 
@@ -49,8 +54,10 @@ respectful sigma =
      guard $ respects sigma ns
      return sigma
 
+reversedCtx = asks $ reverse . map quan2nm
+
 indexNm :: Monad m => Nm -> ReaderT Ctx m Int
-indexNm x = fromJust . elemIndex x . reverse . map quan2nm <$> ask
+indexNm x = fromJust . elemIndex x <$> reversedCtx
 
 -- error when x is not in ctx
 -- calling reverse every time is not efficient - refactor later
