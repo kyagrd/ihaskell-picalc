@@ -5,14 +5,21 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+
 module OpenBisim where
+
 import Control.Applicative
 import Control.Lens.Fold
 import Control.Monad
 import Control.Monad.Fail
 import Control.Monad.Trans.Reader
 import qualified Control.Monad.Fail as Fail
+import Data.List
+import Data.Maybe
 import Data.Tree
+import Data.Partition hiding (empty,rep)
+import qualified Data.Partition as P
+import qualified Data.Set as Set
 import qualified IdSubLTS as IdS
 -- import MemoUgly
 import OpenLTS
@@ -22,65 +29,139 @@ import Unbound.Generics.LocallyNameless hiding (fv)
 instance MonadFail m => MonadFail (FreshMT m) where
   fail = runFreshMT . Fail.fail
 
-sim :: Ctx -> Pr -> Pr -> [Bool]
-sim ctx p q =
-      do (sigma,r) <- runFreshMT . (`runReaderT` ctx) $ one p
-         let sigmaSub = subs ctx sigma
-         let (lp,p') = sigmaSub r
-         return . (or :: [Bool] -> Bool) . runFreshMT $ do
-           (lq,q') <- IdS.one (sigmaSub q)
+data StepLog = One  Ctx EqC Act  Pr
+             | OneB Ctx EqC ActB PrB
+             deriving (Eq,Ord,Show)
+
+type EqC = [(Nm,Nm)]
+
+toEqC ctx sigma = [(x',x) | x:xs <- eqcs, x'<-xs]
+  where
+    ns = quan2nm <$> reverse ctx
+    eqcs = map (ns!!) <$> (Set.toList <$> P.nontrivialSets sigma)
+
+stepLog  eitherC ctx sigma l p = Node . eitherC $ One  ctx (toEqC ctx sigma) l p
+stepLogB eitherC ctx sigma l b = Node . eitherC $ OneB ctx (toEqC ctx sigma) l b
+
+applySubst m = do (sigma,r) <- m
+                  ctx <- ask 
+                  return (sigma, subs ctx sigma r)
+
+unbindWith x b = do (y,r) <- unbind b
+                    return (x, subst y (Var x) r)
+
+sim = simBool_ id sim
+sim' = simStepLog_ Left Right id sim'
+
+bisim p q = simBool_ id   bisim p q
+        <|> simBool_ flip bisim q p
+
+bisim' p q = simStepLog_ Left  Right id   bisim' p q
+         <|> simStepLog_ Right Left  flip bisim' q p
+
+simBool_ = sim_ or' and' or' and'
+  where
+    or'  _ _ _ _ = or  :: [Bool] -> Bool
+    and' _ _ _ _ = and :: [Bool] -> Bool
+
+simStepLog_ eitherP eitherQ =
+    sim_ (stepLog  eitherP) (stepLog  eitherQ)
+         (stepLogB eitherP) (stepLogB eitherQ)
+
+sim_ logLeader  logFollow
+     logLeaderB logFollowB
+     h   -- either id or flip
+     rf  -- recursive function call
+     p q = 
+      do (sigma,(lp,p')) <- applySubst $ one p
+         ctx <- ask
+         return . logLeader ctx sigma lp p' . runFreshMT $ do
+           (lq,q') <- IdS.one (subs ctx sigma q)
            guard $ lp == lq
-           return . (and :: [Bool] -> Bool) $ sim ctx p' q'
-  <|> do (sigma,r) <- runFreshMT . (`runReaderT` ctx) $ oneb p
-         let sigmaSub = subs ctx sigma
-         let (lp,bp') = sigmaSub r
-         let (x',p') = runFreshM $ do { mapM_ fresh (quan2nm <$> ctx); unbind bp' }
-         return . (or :: [Bool] -> Bool) . runFreshMT $ do
-           (lq,bq') <- IdS.oneb (sigmaSub q)
+           return . logFollow ctx sigma lq q' . runFreshMT
+                  . (`runReaderT` ctx) $ h rf p' q'
+  <|> do (sigma,(lp,bp')) <- applySubst $ oneb p
+         ctx <- ask; mapM_ fresh (quan2nm <$> ctx)
+         (x,p') <- unbind bp'
+         return . logLeaderB ctx sigma lp bp' . runFreshMT $ do
+           (lq,bq') <- IdS.oneb (subs ctx sigma q)
            guard $ lp == lq
-           (x,q1) <- unbind bq'
-           let q' = subst x (Var x') q1
+           (_,q') <- unbindWith x bq'
            let ctx' = case lp of { DnB _ -> All x; UpB _ -> Nab x } : ctx
-           return . (and :: [Bool] -> Bool) $ sim ctx' p' q'
-
-bisim :: Ctx -> Pr -> Pr -> [Bool]
-bisim ctx p q =
-      do (sigma,r) <- runFreshMT . (`runReaderT` ctx) $ one p
-         let sigmaSub = subs ctx sigma
-         let (lp,p') = sigmaSub r
-         return . (or :: [Bool] -> Bool) . runFreshMT $ do
-           (lq,q') <- IdS.one (sigmaSub q)
-           guard $ lp == lq
-           return . (and :: [Bool] -> Bool) $ sim ctx p' q'
-  <|> do (sigma,r) <- runFreshMT . (`runReaderT` ctx) $ oneb p
-         let sigmaSub = subs ctx sigma
-         let (lp,bp') = sigmaSub r
-         let (x',p') = runFreshM $ do { mapM_ fresh (quan2nm <$> ctx); unbind bp' }
-         return . (or :: [Bool] -> Bool) . runFreshMT $ do
-           (lq,bq') <- IdS.oneb (sigmaSub q)
-           guard $ lp == lq
-           (x,q1) <- unbind bq'
-           let q' = subst x (Var x') q1
-           let ctx' = case lp of { DnB _ -> All x'; UpB _ -> Nab x' } : ctx
-           return . (and :: [Bool] -> Bool) $ bisim ctx' p' q'
-  <|> do (sigma,r) <- runFreshMT . (`runReaderT` ctx) $ one q
-         let sigmaSub = subs ctx sigma
-         let (lq,q') = sigmaSub r
-         return . (or :: [Bool] -> Bool) . runFreshMT $ do
-           (lp,p') <- IdS.one (sigmaSub p)
-           guard $ lp == lq
-           return . (and :: [Bool] -> Bool) $ bisim ctx p' q'
-  <|> do (sigma,r) <- runFreshMT . (`runReaderT` ctx) $ oneb q
-         let sigmaSub = subs ctx sigma
-         let (lq,bq') = sigmaSub r
-         let (x',q') = runFreshM $ do { mapM_ fresh (quan2nm <$> ctx); unbind bq' }
-         return . (or :: [Bool] -> Bool) . runFreshMT $ do
-           (lp,bp') <- IdS.oneb (sigmaSub p)
-           guard $ lp == lq
-           (x,p1) <- unbind bp';
-           let p' = subst x (Var x') p1
-           let ctx' = case lp of { DnB _ -> All x; UpB _ -> Nab x } : ctx
-           return . (and :: [Bool] -> Bool) $ bisim ctx' p' q'
+           return . logFollowB ctx sigma lq bq' . runFreshMT
+                  . (`runReaderT` ctx) $ h rf p' q'
 
 
-         
+forest2df :: [Tree (Either StepLog StepLog)] -> [(Form,Form)]
+forest2df rs
+            =    do  Node (Left (One _ sigma_p a _)) [] <- rs
+                     let sigmaqs = subsMatchingAct a (right1s rs)
+                     return (prebase sigma_p a, postbase sigmaqs a)
+            <|>  do  Node (Right (One _ sigma_q a _)) [] <- rs
+                     let formR = prebase sigma_q a
+                     let sigmaps = subsMatchingAct a (left1s rs)
+                     return (postbase sigmaps a, formR)
+            <|>  do  Node (Left (OneB _ sigma_p a _)) [] <- rs
+                     let sigmaqs = subsMatchingActB a (right1Bs rs)
+                     return (preBbase sigma_p a, postBbase sigmaqs a)
+            <|>  do  Node (Right (OneB _ sigma_q a _)) [] <- rs
+                     let formR = preBbase sigma_q a
+                     let sigmaps = subsMatchingActB a (left1Bs rs)
+                     return (postBbase sigmaps a, formR)
+            <|>  do  Node (Left (One _ sigma_p a _)) rsR <- rs
+                     let rss' = [rs' | Node _ rs' <- rsR]
+                     (dfsL,dfsR) <- unzip <$> sequence (forest2df <$> rss')
+                     guard . not . null $ dfsL
+                     let sigmaqs = subsMatchingAct a (right1s rs)
+                     return (pre sigma_p a dfsL, post sigmaqs a dfsR)
+            <|>  do  Node (Right (One _ sigma_q a _)) rsL <- rs
+                     let rss' = [rs' | Node _ rs' <- rsL]
+                     (dfsL,dfsR) <- unzip <$> sequence (forest2df <$> rss')
+                     guard . not . null $ dfsL
+                     let sigmaps = subsMatchingAct a (left1s rs)
+                     return (post sigmaps a dfsL, pre sigma_q a dfsR)
+            <|>  do  Node (Left (OneB nctx sigma_p a _)) rsR <- rs
+                     let  rss' = [rs' | Node _ rs' <- rsR]
+                          x = quan2nm . head . getCtx . fromEither
+                            . rootLabel . head $ head rss'
+                     (dfsL,dfsR) <- unzip <$> sequence (forest2df <$> rss')
+                     guard . not . null $ dfsL
+                     let sigmaqs = subsMatchingActB a (right1Bs rs)
+                     return (preB sigma_p a x dfsL, postB sigmaqs a x dfsR)
+            <|>  do  Node (Right (OneB nctx sigma_q a _)) rsL <- rs
+                     let  rss' = [rs' | Node _ rs' <- rsL]
+                          x = quan2nm . head . getCtx . fromEither . rootLabel
+                                $ head (head rss')
+                     (dfsL,dfsR) <- unzip <$> sequence (forest2df <$> rss')
+                     guard . not . null $ dfsL
+                     let sigmaps = subsMatchingActB a (left1Bs rs)
+                     return (postB sigmaps a x dfsL, preB sigma_q a x dfsR)
+  where
+    prebase sigma a = pre sigma a []
+    postbase sigmas a = post sigmas a []
+    preBbase sigma a = preB sigma a (s2n "?") []
+    postBbase sigmas a = postB sigmas a (s2n "?") []
+    pre sigma a = boxMat sigma . Dia a . conj
+    post sigmas a fs = Box a . disj $  (diaMat<$>sigmas) ++ fs
+    preB sigma a x = boxMat sigma . DiaB a . bind x . conj
+    postB sigmas a x fs = BoxB a . bind x . disj $  (diaMat<$>sigmas) ++ fs
+    boxMat  [] = id; boxMat  sigma = BoxMatch [(Var x,Var y) | (x,y)<-sigma]
+    diaMat  [] = FF; diaMat  sigma = DiaMatch [(Var x,Var y) | (x,y)<-sigma]
+    right1s  rs = [log | Node (Right  log@One{}) _ <- rs]
+    left1s   rs = [log | Node (Left   log@One{}) _ <- rs]
+    right1Bs  rs = [log | Node (Right  log@OneB{}) _ <- rs]
+    left1Bs   rs = [log | Node (Left   log@OneB{}) _ <- rs]
+    getCtx (One   nctx _ _ _)  = nctx; getCtx (OneB  nctx _ _ _) = nctx
+    fromEither (Left   t) = t; fromEither (Right  t) = t
+
+subsMatchingAct :: Act -> [StepLog] -> [EqC]
+subsMatchingAct a logs =
+  do  One ctx sigma' a' _ <-logs          ;  let sigmaSubs = subs' ctx sigma'
+      guard $ sigmaSubs a == sigmaSubs a' ;  return sigma'
+
+subsMatchingActB :: ActB -> [StepLog] -> [EqC]
+subsMatchingActB a logs =
+  do  OneB ctx sigma' a' _ <-logs         ;  let sigmaSubs = subs' ctx sigma'
+      guard $ sigmaSubs a == sigmaSubs a' ;  return sigma'
+
+subs' ctx eqc = substs [(x,Var y) | (x,y) <- eqc]

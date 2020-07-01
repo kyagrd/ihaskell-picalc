@@ -96,7 +96,6 @@ subs ctx sigma = substs [(x, Var y) | i <-[0..length ns-1],
                                        let x = ns !! i,
                                        let y = ns !! P.rep sigma i ]
   where ns = reverse . map quan2nm $ ctx
-      
 
 one (Out x y p) = return (P.empty,(Up x y,p))
 one (TauP p)    = return (P.empty,(Tau,p))
