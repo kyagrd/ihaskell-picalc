@@ -22,12 +22,13 @@ import qualified Data.Partition as P
 import qualified Data.Set as Set
 import qualified IdSubLTS as IdS
 -- import MemoUgly
+import Lib
 import OpenLTS
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
 
-instance MonadFail m => MonadFail (FreshMT m) where
-  fail = runFreshMT . Fail.fail
+instance (MonadPlus m, MonadFail m) => MonadFail (FreshMT m) where
+  fail _ = mzero
 
 data StepLog = One  Ctx EqC Act  Pr
              | OneB Ctx EqC ActB PrB
@@ -47,8 +48,26 @@ applySubst m = do (sigma,r) <- m
                   ctx <- ask 
                   return (sigma, subs ctx sigma r)
 
-unbindWith x b = do (y,r) <- unbind b
-                    return (x, subst y (Var x) r)
+-- unbindWith x b = do (y,r) <- unbind b
+--                     return (x, subst y (Var x) r)
+
+fvMaxInteger p = maximum $ 0 : map name2Integer (fv p :: [Nm])
+
+runSim ctx p q = and $ run sim ctx p q
+runBisim ctx p q = and $ run bisim ctx p q
+
+run_sim p q = and $ run_ sim p q
+run_bisim p q = and $ run_ bisim p q
+
+runSim' = run sim'
+runBisim' = run bisim'
+
+run_sim' = run_ sim'
+run_bisim' = run_ bisim'
+
+run f ctx p q = f p q `runReaderT` ctx `contFreshMT` (1+fvMaxInteger ctx)
+
+run_ f p q = run f (All<$>fv(p,q)) p q
 
 sim = simBool_ id sim
 sim' = simStepLog_ Left Right id sim'
@@ -75,21 +94,25 @@ sim_ logLeader  logFollow
      p q = 
       do (sigma,(lp,p')) <- applySubst $ one p
          ctx <- ask
-         return . logLeader ctx sigma lp p' . runFreshMT $ do
-           (lq,q') <- IdS.one (subs ctx sigma q)
-           guard $ lp == lq
-           return . logFollow ctx sigma lq q' . runFreshMT
-                  . (`runReaderT` ctx) $ h rf p' q'
+         return . logLeader ctx sigma lp p'
+                . (`contFreshMT` (1+fvMaxInteger ctx))
+                $ do (lq,q') <- IdS.one (subs ctx sigma q)
+                     guard $ lp == lq
+                     return . logFollow ctx sigma lq q'
+                            . (`contFreshMT` (1+fvMaxInteger ctx))
+                            . (`runReaderT` ctx) $ h rf p' q'
   <|> do (sigma,(lp,bp')) <- applySubst $ oneb p
-         ctx <- ask; mapM_ fresh (quan2nm <$> ctx)
-         (x,p') <- unbind bp'
-         return . logLeaderB ctx sigma lp bp' . runFreshMT $ do
-           (lq,bq') <- IdS.oneb (subs ctx sigma q)
-           guard $ lp == lq
-           (_,q') <- unbindWith x bq'
-           let ctx' = case lp of { DnB _ -> All x; UpB _ -> Nab x } : ctx
-           return . logFollowB ctx sigma lq bq' . runFreshMT
-                  . (`runReaderT` ctx) $ h rf p' q'
+         ctx <- ask
+         (x',p') <- unbind bp'
+         return . logLeaderB ctx sigma lp bp'
+                . (`contFreshMT` (1+fvMaxInteger (x',ctx)))
+                $ do (lq,bq') <- IdS.oneb (subs ctx sigma q)
+                     guard $ lp == lq
+                     (x,_,q1) <- unbind2' bp' bq'; let q' = subst x (Var x') q1
+                     let ctx' = case lp of { DnB _ -> All x'; UpB _ -> Nab x' } : ctx
+                     return . logFollowB ctx sigma lq bq'
+                            . (`contFreshMT` (1+fvMaxInteger ctx'))
+                            . (`runReaderT` ctx') $ h rf p' q'
 
 
 forest2df :: [Tree (Either StepLog StepLog)] -> [(Form,Form)]

@@ -19,11 +19,9 @@ import Data.List
 import qualified Data.Set as S
 import Data.Maybe
 import qualified Data.Partition as P
+import Lib (fv)
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
-import qualified Unbound.Generics.LocallyNameless as U
-
-fv = toListOf U.fv
 
 type Ctx = [Quan]
 
@@ -58,7 +56,12 @@ reversedCtxNames = reverse <$> ctxNames
 ctxNames = asks (map quan2nm)
 
 indexNm :: Monad m => Nm -> ReaderT Ctx m Int
-indexNm x = fromJust . elemIndex x <$> reversedCtxNames
+indexNm x = do  mi <- elemIndex x <$> reversedCtxNames
+                ctx <- reverse <$> ask
+                case mi of 
+                   Nothing -> error $ show x ++ " is not indexed by "++ show ctx
+                   Just i  -> return i
+   -- fromJust .
 
 -- error when x is not in ctx
 -- calling reverse every time is not efficient - refactor later
@@ -115,11 +118,11 @@ one (Par p q) =
          (y,p',q') <- unbind2' bp bq
          return (sigma',(Tau,Nu (y .\ Par p' q')))
   <|> do (sigma_p,(Up x v,p')) <- one p
-         (sigma_q,(DnB x',(y,q'))) <- oneb' q
+         (sigma_q,(DnB x',(y,q'))) <- onebu q
          sigma <- joinTm x x'
          sigma' <- joinParts [sigma,sigma_p,sigma_q]
          return (sigma',(Tau,Par p' (subst y v q')))  -- interaction
-  <|> do (sigma_p,(DnB x',(y,p'))) <- oneb' p
+  <|> do (sigma_p,(DnB x',(y,p'))) <- onebu p
          (sigma_q,(Up x v,q')) <- one q
          sigma <- joinTm x x'
          sigma' <- joinParts [sigma,sigma_p,sigma_q]
@@ -141,25 +144,25 @@ oneb (Match x y p) =
          return (sigma',r)
 oneb (Plus p q) = oneb p <|> oneb q
 oneb (Par p q) =
-      do (sigma,(l,(x,p'))) <- oneb' p; return (sigma,(l,x .\ Par p' q))
-  <|> do (sigma,(l,(x,q'))) <- oneb' q; return (sigma,(l,x .\ Par p q'))
+      do (sigma,(l,(x,p'))) <- onebu p; return (sigma,(l,x .\ Par p' q))
+  <|> do (sigma,(l,(x,q'))) <- onebu q; return (sigma,(l,x .\ Par p q'))
 oneb (Nu b) =
       do (x,p) <- unbind b
          (sigma,(l,(y,p'))) <- local (extendCtx (Nab x)) $
-           do ret@(sigma,(l,r)) <- oneb' p
+           do ret@(sigma,(l,r)) <- onebu p
               notElemWith sigma x (fv l)
               return ret
          return (sigma,(l, y.\Nu (x.\p')))
   <|> do (x,p) <- unbind b
          (sigma,(Up vy _,p')) <- local (extendCtx (Nab x)) $
-          do ret@(sigma,(Up (Var y) (Var x'),_)) <- one p
-             equalWith sigma x x' -- guard x==x' under substitution sigma
-             noteqWith sigma x y  -- guard x/=y  under substitution sigma
-             return ret
+           do ret@(sigma,(Up (Var y) (Var x'),_)) <- one p
+              equalWith sigma x x' -- guard x==x' under substitution sigma
+              noteqWith sigma x y  -- guard x/=y  under substitution sigma
+              return ret
          return (sigma,(UpB vy, x.\p')) -- open
 oneb _ = empty
 
-oneb' p =
+onebu p =
   do (sigma,(l,b)) <- oneb p
      r <- unbind b
      return (sigma,(l,r))

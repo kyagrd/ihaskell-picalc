@@ -28,6 +28,8 @@ dependencies:
 - transformers
 - data-partition
 - tree-view
+- hspec
+- QuickCheck
 # - bimap
 
 library:
@@ -54,3 +56,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - picalc
+    - hspec
+    - QuickCheck

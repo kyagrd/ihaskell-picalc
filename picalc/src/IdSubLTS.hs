@@ -12,12 +12,10 @@ import Control.Lens.Fold
 import Control.Monad
 import Control.Monad.Fail
 import Control.Monad.Trans.Identity
+import Data.Typeable
+import Lib (fv)
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
-import qualified Unbound.Generics.LocallyNameless as U
-
-
-fv = toListOf U.fv
 
 interactsB (UpB x) (DnB x') = x == x'
 interactsB (DnB x) (UpB x') = x == x'
@@ -39,10 +37,10 @@ one (Par p q) =
          (y, p', q') <- unbind2' bp bq
          return (Tau, Nu (y .\ Par p' q'))
   <|> do (Up x v, p') <- one p
-         (DnB x', (y, q')) <- oneb' q
+         (DnB x', (y, q')) <- onebu q
          guard $ x == x'
          return (Tau, Par p' (subst y v q')) -- interaction
-  <|> do (DnB x', (y, p')) <- oneb' p
+  <|> do (DnB x', (y, p')) <- onebu p
          (Up x v, q') <- one q
          guard $ x == x'
          return (Tau, Par (subst y v p') q') -- interaction
@@ -60,11 +58,11 @@ oneb (Match x y p) =
          oneb p
 oneb (Plus p q) = oneb p <|> oneb q
 oneb (Par p q) =
-      do (l, (x, p')) <- oneb' p; return (l, x .\ Par p' q)
-  <|> do (l, (x, q')) <- oneb' q; return (l, x .\ Par p q')
+      do (l, (x, p')) <- onebu p; return (l, x .\ Par p' q)
+  <|> do (l, (x, q')) <- onebu q; return (l, x .\ Par p q')
 oneb (Nu b) =
       do (x, p) <- unbind b
-         (l, (y, p')) <- oneb' p
+         (l, (y, p')) <- onebu p
          guard $ x `notElem` fv l
          return (l, y .\ Nu (x .\ p'))
   <|> do (x, p) <- unbind b
@@ -73,7 +71,7 @@ oneb (Nu b) =
          return (UpB (Var y), x .\ p') -- open
 oneb _ = empty
 
-oneb' p = do (l, b) <- oneb p; r <- unbind b; return (l, r)
+onebu p = do (l, b) <- oneb p; r <- unbind b; return (l, r)
 {-
 % Finite pi-calculus specification in lambda-Prolog
 % A specification of the late transition system for the finite pi calculus.
