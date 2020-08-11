@@ -1,21 +1,43 @@
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE DeriveGeneric             #-}
-{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module PiCalc where
+
 import GHC.Generics (Generic)
+import Control.Monad
+import Control.Monad.Fail
+import Data.Data
+import Data.List
+import Data.Maybe
+import Data.Typeable
+import Generics.Deriving
+import Generics.SYB.Schemes
 import Unbound.Generics.LocallyNameless
+import Unbound.Generics.LocallyNameless.Name
+import Unbound.Generics.LocallyNameless.Bind
+import Unbound.Generics.LocallyNameless.Unsafe
+
+instance (MonadPlus m, MonadFail m) => MonadFail (FreshMT m) where
+  fail _ = mzero
 
 type Nm = Name Tm
-newtype Tm = Var Nm deriving (Eq, Ord, Show, Generic)
+deriving instance Data Nm
+
+newtype Tm = Var Nm deriving (Eq, Ord, Show, Generic, Typeable, Data)
 
 data Pr  = Null | TauP Pr | Out Tm Tm Pr | In Tm PrB | Match Tm Tm Pr
-         | Plus Pr Pr | Par Pr Pr | Nu PrB  deriving (Eq, Ord, Show, Generic)
+         | Plus Pr Pr | Par Pr Pr | Nu PrB  deriving (Eq, Ord, Show, Generic, Typeable, Data)
 type PrB = Bind Nm Pr
+deriving instance Data PrB
+
 instance Eq PrB where (==) = aeq
 instance Ord PrB where compare = acompare
 
@@ -58,37 +80,36 @@ taup = TauP
 nu = Nu
 
 
-{- To port these, may need DeriveDataTypeable
 ------------------------------------------------------------------
 -- transformation/reduction of processes via generic programming
 ------------------------------------------------------------------
-removeNull :: Rep a => a -> a
+-- removeNull :: Typeable a => a -> a
 removeNull a = case cast a of
-  Just(Plus Null x) -> fromJust(cast x)
-  Just(Plus x Null) -> fromJust(cast x)
-  Just(Par Null x) -> fromJust(cast x)
-  Just(Par x Null) -> fromJust(cast x)
+  Just(Plus Null x) -> fromJust $ cast x
+  Just(Plus x Null) -> fromJust $ cast x
+  Just(Par Null x)  -> fromJust $ cast x
+  Just(Par x Null)  -> fromJust $ cast x
+  Just(Nu b) | snd(unsafeUnbind b) == Null -> fromJust(cast Null)
   _ -> a
+
 -- rotate right for associative operators Plus and Par
-rotateRight :: Rep a => a -> a
 rotateRight a = case cast a of
   Just(Plus (Plus x y) z) -> fromJust . cast $ Plus x (Plus y z)
   Just(Par (Par x y) z) -> fromJust . cast $ Par x (Par y z)
   _ -> a
--- nub/sort for commutative operators Plus and Par
-nubSortComm :: Rep a => a -> a
-nubSortComm a = case cast a of
-  Just p@(Plus _ _) -> fromJust . cast . foldr1 Plus . nubSort $
-    unfoldr (\q -> case q of { Plus x y -> Just(x,y) ; _ -> Nothing }) p
-  Just p@(Par _ _) -> fromJust . cast . foldr1 Par . nubSort $
-    unfoldr (\q -> case q of { Par x y -> Just(x,y) ; _ -> Nothing }) p
+
+-- sort for commutative operators Plus and Par
+sortComm a = case cast a of
+  Just p@(Plus _ _) -> fromJust . cast . foldr1 Plus . sort $
+    unfoldr (\case { Plus x y -> Just(x,y) ; Null -> Nothing ; z -> Just (z,Null) }) p
+  Just p@(Par _ _) -> fromJust . cast . foldr1 Par . sort $
+    unfoldr (\case { Par x y -> Just(x,y) ; Null -> Nothing ; z -> Just (z,Null) }) p
   _ -> a
-simplify = everywhere nubSortComm
-         . everywhere rotateRight
-         . everywhere removeNull
+
+simplify = everywhere sortComm . everywhere rotateRight . everywhere removeNull
+
 {-
 foldl1 Plus (replicate 3 $ foldl1 Par [Null,Null,Null])
 everywhere rotateRight $ foldl1 Plus (replicate 3 $ foldl1 Par [Null,Null,Null])
-red $ foldl1 Plus (replicate 3 $ foldl1 Par [Null,Null,Null])
--}
+simplify $ foldl1 Plus (replicate 3 $ foldl1 Par [Null,Null,Null])
 -}

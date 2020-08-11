@@ -16,47 +16,52 @@ import Data.Typeable
 import Lib (fv)
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
+memo = id -- import MemoUgly
 
 interactsB (UpB x) (DnB x') = x == x'
 interactsB (DnB x) (UpB x') = x == x'
 interactsB _ _ = False
 
-one :: (Alternative m, Fresh m, MonadFail m) => Pr -> m (Act,Pr)
+sone  p = _one  p
+soneb p = _oneb p
+
+_one = memo ((fmap simplify <$>) . one)
+_oneb = memo ((fmap simplify <$>) . oneb)
+
 one (Out x y p) = return (Up x y, p)
 one (TauP p)    = return (Tau, p)
 one (Match x y p) =
       do guard $ x == y
-         one p
-one (Plus p q) = one p <|> one q
+         _one p
+one (Plus p q) = _one p <|> _one q
 one (Par p q) =
-      do (l, p') <- one p; return (l, Par p' q)
-  <|> do (l, q') <- one q; return (l, Par p q')
-  <|> do (lp, bp) <- oneb p
-         (lq, bq) <- oneb q
+      do (l, p') <- _one p; return (l, Par p' q)
+  <|> do (l, q') <- _one q; return (l, Par p q')
+  <|> do (lp, bp) <- _oneb p
+         (lq, bq) <- _oneb q
          guard $ interactsB lp lq -- close
          (y, p', q') <- unbind2' bp bq
          return (Tau, Nu (y .\ Par p' q'))
-  <|> do (Up x v, p') <- one p
+  <|> do (Up x v, p') <- _one p
          (DnB x', (y, q')) <- onebu q
          guard $ x == x'
          return (Tau, Par p' (subst y v q')) -- interaction
   <|> do (DnB x', (y, p')) <- onebu p
-         (Up x v, q') <- one q
+         (Up x v, q') <- _one q
          guard $ x == x'
          return (Tau, Par (subst y v p') q') -- interaction
 one (Nu b) =
       do (x, p) <- unbind b
-         (l, p') <- one p
+         (l, p') <- _one p
          guard $ x `notElem` fv l
          return (l, Nu (x .\ p'))
 one _ = empty
 
-oneb :: (Alternative m, Fresh m, MonadFail m) => Pr -> m (ActB, PrB)
 oneb (In x p) = return (DnB x, p)
 oneb (Match x y p) =
       do guard $ x == y
-         oneb p
-oneb (Plus p q) = oneb p <|> oneb q
+         _oneb p
+oneb (Plus p q) = _oneb p <|> _oneb q
 oneb (Par p q) =
       do (l, (x, p')) <- onebu p; return (l, x .\ Par p' q)
   <|> do (l, (x, q')) <- onebu q; return (l, x .\ Par p q')
@@ -66,12 +71,12 @@ oneb (Nu b) =
          guard $ x `notElem` fv l
          return (l, y .\ Nu (x .\ p'))
   <|> do (x, p) <- unbind b
-         (l@(Up (Var y) (Var x')), p') <- one p
+         (l@(Up (Var y) (Var x')), p') <- _one p
          guard $ x /= y && x == x'
          return (UpB (Var y), x .\ p') -- open
 oneb _ = empty
 
-onebu p = do (l, b) <- oneb p; r <- unbind b; return (l, r)
+onebu p = do (l, b) <- _oneb p; r <- unbind b; return (l, r)
 {-
 % Finite pi-calculus specification in lambda-Prolog
 % A specification of the late transition system for the finite pi calculus.

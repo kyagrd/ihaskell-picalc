@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE PartialTypeSignatures #-}
@@ -20,15 +21,17 @@ import Data.Tree
 import Data.Partition hiding (empty,rep)
 import qualified Data.Partition as P
 import qualified Data.Set as Set
-import qualified IdSubLTS as IdS
--- import MemoUgly
-import Lib
-import OpenLTS
-import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
+import MemoUgly
 
-instance (MonadPlus m, MonadFail m) => MonadFail (FreshMT m) where
-  fail _ = mzero
+import Lib
+import PiCalc
+import qualified IdSubLTS as IdS
+import OpenLTS
+
+-- instance MonadCache (Pr,Pr) Bool (FreshMT []) where
+--   lookup k = lift $ MemoClass.lookup k
+--   add k v  = lift $ MemoClass.add k v
 
 data StepLog = One  Ctx EqC Act  Pr
              | OneB Ctx EqC ActB PrB
@@ -48,9 +51,6 @@ applySubst m = do (sigma,r) <- m
                   ctx <- ask 
                   return (sigma, subs ctx sigma r)
 
--- unbindWith x b = do (y,r) <- unbind b
---                     return (x, subst y (Var x) r)
-
 fvMaxInteger p = maximum $ 0 : map name2Integer (fv p :: [Nm])
 
 runSim ctx p q = and $ run sim ctx p q
@@ -65,15 +65,35 @@ runBisim' = run bisim'
 run_sim' = run_ sim'
 run_bisim' = run_ bisim'
 
-run f ctx p q = f p q `runReaderT` ctx `contFreshMT` (1+fvMaxInteger ctx)
+run f ctx p q = f p q `runReaderT` ctx `contFreshMT` (1+fvMaxInteger ctx) 
 
 run_ f p q = run f (All<$>fv(p,q)) p q
 
 sim = simBool_ id sim
 sim' = simStepLog_ Left Right id sim'
 
-bisim p q = simBool_ id   bisim p q
-        <|> simBool_ flip bisim q p
+{-
+-- bisimMemo = curry $ memoFix bisim_unfix
+
+bisim_unfix f (p,q)
+  | p `aeq` q = return True -- to test bisim refl, comment this line
+  | otherwise = simBool_ id   (curry f) p q
+            <|> simBool_ flip (curry f) q p
+
+-- bisim = bisimMemo
+-}
+
+-- bisimM (p,q)
+--   | p `aeq` q = return True -- to test bisim refl, comment this line
+--   | otherwise = simBool_ id   (curry $ memo bisimM) p q
+--             <|> simBool_ flip (curry $ memo bisimM) q p
+
+-- cmemo = curry . memo . uncurry
+
+bisim p q
+  | p `aeq` q = return True -- to test bisim refl, comment this line
+  | otherwise = simBool_ id   bisim p q
+            <|> simBool_ flip bisim q p
 
 bisim' p q = simStepLog_ Left  Right id   bisim' p q
          <|> simStepLog_ Right Left  flip bisim' q p
@@ -92,27 +112,29 @@ sim_ logLeader  logFollow
      h   -- either id or flip
      rf  -- recursive function call
      p q = 
-      do (sigma,(lp,p')) <- applySubst $ one p
+      do (sigma,(lp,p')) <- applySubst $ sone p
          ctx <- ask
          return . logLeader ctx sigma lp p'
                 . (`contFreshMT` (1+fvMaxInteger ctx))
-                $ do (lq,q') <- IdS.one (subs ctx sigma q)
+                $ do (lq,q') <- IdS.sone (subs ctx sigma q)
                      guard $ lp == lq
                      return . logFollow ctx sigma lq q'
                             . (`contFreshMT` (1+fvMaxInteger ctx))
-                            . (`runReaderT` ctx) $ h rf p' q'
-  <|> do (sigma,(lp,bp')) <- applySubst $ oneb p
+                            . (`runReaderT` ctx)
+                            $ h rf p' q'
+  <|> do (sigma,(lp,bp')) <- applySubst $ soneb p
          ctx <- ask
          (x',p') <- unbind bp'
          return . logLeaderB ctx sigma lp bp'
                 . (`contFreshMT` (1+fvMaxInteger (x',ctx)))
-                $ do (lq,bq') <- IdS.oneb (subs ctx sigma q)
+                $ do (lq,bq') <- IdS.soneb (subs ctx sigma q)
                      guard $ lp == lq
                      (x,_,q1) <- unbind2' bp' bq'; let q' = subst x (Var x') q1
                      let ctx' = case lp of { DnB _ -> All x'; UpB _ -> Nab x' } : ctx
                      return . logFollowB ctx sigma lq bq'
                             . (`contFreshMT` (1+fvMaxInteger ctx'))
-                            . (`runReaderT` ctx') $ h rf p' q'
+                            . (`runReaderT` ctx')
+                            $ h rf p' q'
 
 
 forest2df :: [Tree (Either StepLog StepLog)] -> [(Form,Form)]

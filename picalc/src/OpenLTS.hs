@@ -22,6 +22,7 @@ import qualified Data.Partition as P
 import Lib (fv)
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
+memo = id -- import MemoUgly
 
 type Ctx = [Quan]
 
@@ -100,37 +101,43 @@ subs ctx sigma = substs [(x, Var y) | i <-[0..length ns-1],
                                        let y = ns !! P.rep sigma i ]
   where ns = reverse . map quan2nm $ ctx
 
+sone  p = _one  p
+soneb p = _oneb p
+
+_one = memo ((fmap (fmap simplify) <$>) . one)
+_oneb = memo ((fmap (fmap simplify) <$>) . oneb)
+
 one (Out x y p) = return (P.empty,(Up x y,p))
 one (TauP p)    = return (P.empty,(Tau,p))
 one (Match x y p) =
       do sigmaxy <- joinTm x y
-         (sigma,r) <- one p
+         (sigma,r) <- _one p
          sigma' <- joinParts [sigmaxy,sigma]
          return (sigma',r)
-one (Plus p q) = one p <|> one q
+one (Plus p q) = _one p <|> _one q
 one (Par p q) =
-      do (sigma,(l,p')) <- one p; return (sigma,(l,Par p' q))
-  <|> do (sigma,(l,q')) <- one q; return (sigma,(l,Par p q'))
-  <|> do (sigma_p,(lp,bp)) <- oneb p
-         (sigma_q,(lq,bq)) <- oneb q
+      do (sigma,(l,p')) <- _one p; return (sigma,(l,Par p' q))
+  <|> do (sigma,(l,q')) <- _one q; return (sigma,(l,Par p q'))
+  <|> do (sigma_p,(lp,bp)) <- _oneb p
+         (sigma_q,(lq,bq)) <- _oneb q
          sigma <- interactsB lp lq             -- close
          sigma' <- joinParts [sigma,sigma_p,sigma_q]
          (y,p',q') <- unbind2' bp bq
          return (sigma',(Tau,Nu (y .\ Par p' q')))
-  <|> do (sigma_p,(Up x v,p')) <- one p
+  <|> do (sigma_p,(Up x v,p')) <- _one p
          (sigma_q,(DnB x',(y,q'))) <- onebu q
          sigma <- joinTm x x'
          sigma' <- joinParts [sigma,sigma_p,sigma_q]
          return (sigma',(Tau,Par p' (subst y v q')))  -- interaction
   <|> do (sigma_p,(DnB x',(y,p'))) <- onebu p
-         (sigma_q,(Up x v,q')) <- one q
+         (sigma_q,(Up x v,q')) <- _one q
          sigma <- joinTm x x'
          sigma' <- joinParts [sigma,sigma_p,sigma_q]
          return (sigma',(Tau,Par (subst y v p') q'))  -- interaction
 one (Nu b) =
       do (x,p) <- unbind b
          (sigma,(l,p')) <- local (extendCtx (Nab x)) $
-            do ret@(sigma,(l,p')) <- one p
+            do ret@(sigma,(l,p')) <- _one p
                notElemWith sigma x (fv l)
                return ret
          return (sigma,(l,Nu (x .\ p')))
@@ -139,10 +146,10 @@ one _ = empty
 oneb (In x p) = return (P.empty,(DnB x,p))
 oneb (Match x y p) =
       do sigmaxy <- joinTm x y
-         (sigma,r) <- oneb p
+         (sigma,r) <- _oneb p
          sigma' <- joinParts [sigmaxy,sigma]
          return (sigma',r)
-oneb (Plus p q) = oneb p <|> oneb q
+oneb (Plus p q) = _oneb p <|> _oneb q
 oneb (Par p q) =
       do (sigma,(l,(x,p'))) <- onebu p; return (sigma,(l,x .\ Par p' q))
   <|> do (sigma,(l,(x,q'))) <- onebu q; return (sigma,(l,x .\ Par p q'))
@@ -163,6 +170,6 @@ oneb (Nu b) =
 oneb _ = empty
 
 onebu p =
-  do (sigma,(l,b)) <- oneb p
+  do (sigma,(l,b)) <- _oneb p
      r <- unbind b
      return (sigma,(l,r))

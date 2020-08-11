@@ -66,13 +66,14 @@ bisimSpecRefl = describe "bisim reflexive" $ do
     it (show p002) $ run_bisim_refl p002 `shouldBe` True
     it (show p003) $ run_bisim_refl p003 `shouldBe` True
     it "arbitrary same processes" $ 
-      withMaxSuccess 5000 . property $ \p -> run_bisim_refl (trace (show p) p) `shouldBe` True
+      withMaxSuccess 100 . property $ \p -> run_bisim_refl p `shouldBe` True
 
 bisimSpecPlusSymm = describe "bisim Plus symm" $ -- do 
     it "arbitrary plus processes" $ 
-      withMaxSuccess 5000 . property $ \p q -> run_bisim (Plus p q) (Plus q p) `shouldBe` True
+      withMaxSuccess 100 . property $ \p q -> run_bisim (Plus p q) (Plus q p) `shouldBe` True
 
-bisimSpecParSymm = describe "bisim Par symm" $ -- do 
+bisimSpecParSymm = describe "bisim Par symm" $ do 
+    it "p004 p005" $ run_bisim p004 p005 `shouldBe` True
     it "arbitrary par processes" $ 
       withMaxSuccess 100 . property $ \p q -> run_bisim (Par p q) (Par q p) `shouldBe` True
 
@@ -83,3 +84,6 @@ run_bisim_refl p = run_bisim p p
 p001 = Match (Var c) (Var b) (Nu (c.\ Out (Var b) (Var b) Null))
 p002 = Match (Var c) (Var b) (Nu (c.\ In (Var b) (e.\ Null)))
 p003 = Match (Var d) (Var c) (Nu (d.\ Match (Var d) (Var c) (TauP Null)))
+
+p004 = In (Var c) (e.\ Out (Var a) (Var d) Null) `Par` In (Var b) (e.\ Null)
+p005 = In (Var b) (e.\ Null) `Par` In (Var c) (e.\ Out (Var a) (Var d) Null)

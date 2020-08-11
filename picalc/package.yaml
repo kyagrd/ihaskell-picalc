@@ -24,13 +24,15 @@ dependencies:
 - unbound-generics
 - lens
 - uglymemo
+- monad-memo
 - containers
 - transformers
 - data-partition
 - tree-view
+- syb
+- generic-deriving
 - hspec
 - QuickCheck
-# - bimap
 
 library:
   source-dirs: src
