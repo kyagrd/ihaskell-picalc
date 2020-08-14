@@ -13,10 +13,10 @@ import Control.Monad
 import Control.Monad.Fail
 import Control.Monad.Trans.Identity
 import Data.Typeable
-import Lib (fv)
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
-memo = id -- import MemoUgly
+import MemoUgly
+-- umemo = id
 
 interactsB (UpB x) (DnB x') = x == x'
 interactsB (DnB x) (UpB x') = x == x'
@@ -25,8 +25,8 @@ interactsB _ _ = False
 sone  p = _one  p
 soneb p = _oneb p
 
-_one = memo ((fmap simplify <$>) . one)
-_oneb = memo ((fmap simplify <$>) . oneb)
+_one = umemo ((fmap simplify <$>) . one)
+_oneb = umemo ((fmap simplify <$>) . oneb)
 
 one (Out x y p) = return (Up x y, p)
 one (TauP p)    = return (Tau, p)

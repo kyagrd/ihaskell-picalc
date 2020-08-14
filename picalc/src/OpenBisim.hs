@@ -53,42 +53,48 @@ applySubst m = do (sigma,r) <- m
 
 fvMaxInteger p = maximum $ 0 : map name2Integer (fv p :: [Nm])
 
-runSim ctx p q = and $ run sim ctx p q
-runBisim ctx p q = and $ run bisim ctx p q
+runSim ctx p q = and $ run simMemo ctx p q
+runBisim ctx p q = and $ run bisimMemo ctx p q
 
-run_sim p q = and $ run_ sim p q
-run_bisim p q = and $ run_ bisim p q
+run_sim p q = and $ run_ simMemo p q
+run_bisim p q = and $ run_ bisimMemo p q
 
-runSim' = run sim'
-runBisim' = run bisim'
+runSim' = run sim'Memo
+runBisim' = run bisim'Memo
 
-run_sim' = run_ sim'
-run_bisim' = run_ bisim'
+run_sim' = run_ sim'Memo
+run_bisim' = run_ bisim'Memo
 
 run f ctx p q = f p q `runReaderT` ctx `contFreshMT` (1+fvMaxInteger ctx) 
 
 run_ f p q = run f (All<$>fv(p,q)) p q
 
+
+sim'Memo = curry $ umemoFix sim'_unfix
+simMemo = curry $ umemoFix sim_unfix
+
+sim_unfix f (p,q)
+  | p `aeq` q = return True
+  | otherwise = simBool_ id   (curry f) p q
+
+sim'_unfix f (p,q) = simStepLog_ Left  Right id   (curry f) p q
+
 sim = simBool_ id sim
 sim' = simStepLog_ Left Right id sim'
 
-{-
--- bisimMemo = curry $ memoFix bisim_unfix
+bisimMemo = curry $ umemoFix bisim_unfix
+bisim'Memo = curry $ umemoFix bisim'_unfix
 
 bisim_unfix f (p,q)
   | p `aeq` q = return True -- to test bisim refl, comment this line
   | otherwise = simBool_ id   (curry f) p q
             <|> simBool_ flip (curry f) q p
 
--- bisim = bisimMemo
--}
+bisim'_unfix f (p,q)
+           = simStepLog_ Left  Right id   (curry f) p q
+         <|> simStepLog_ Right Left  flip (curry f) q p
 
--- bisimM (p,q)
---   | p `aeq` q = return True -- to test bisim refl, comment this line
---   | otherwise = simBool_ id   (curry $ memo bisimM) p q
---             <|> simBool_ flip (curry $ memo bisimM) q p
-
--- cmemo = curry . memo . uncurry
+-- cumemo = curry . umemo . uncurry
 
 bisim p q
   | p `aeq` q = return True -- to test bisim refl, comment this line

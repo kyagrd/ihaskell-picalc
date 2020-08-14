@@ -14,13 +14,15 @@ module PiCalc where
 import GHC.Generics (Generic)
 import Control.Monad
 import Control.Monad.Fail
+import Control.Lens.Fold
 import Data.Data
 import Data.List
 import Data.Maybe
 import Data.Typeable
 import Generics.Deriving
 import Generics.SYB.Schemes
-import Unbound.Generics.LocallyNameless
+import Unbound.Generics.LocallyNameless hiding (fv)
+import Unbound.Generics.LocallyNameless as U
 import Unbound.Generics.LocallyNameless.Name
 import Unbound.Generics.LocallyNameless.Bind
 import Unbound.Generics.LocallyNameless.Unsafe
@@ -113,3 +115,6 @@ foldl1 Plus (replicate 3 $ foldl1 Par [Null,Null,Null])
 everywhere rotateRight $ foldl1 Plus (replicate 3 $ foldl1 Par [Null,Null,Null])
 simplify $ foldl1 Plus (replicate 3 $ foldl1 Par [Null,Null,Null])
 -}
+
+fv :: (Alpha a, Typeable b) => a -> [Name b]
+fv = sort . nub . toListOf U.fv

@@ -19,10 +19,10 @@ import Data.List
 import qualified Data.Set as S
 import Data.Maybe
 import qualified Data.Partition as P
-import Lib (fv)
 import PiCalc
 import Unbound.Generics.LocallyNameless hiding (fv)
-memo = id -- import MemoUgly
+import MemoUgly
+-- umemo = id
 
 type Ctx = [Quan]
 
@@ -56,7 +56,7 @@ reversedCtxNames = reverse <$> ctxNames
 
 ctxNames = asks (map quan2nm)
 
-indexNm :: Monad m => Nm -> ReaderT Ctx m Int
+-- indexNm :: Monad m => Nm -> ReaderT Ctx m Int
 indexNm x = do  mi <- elemIndex x <$> reversedCtxNames
                 ctx <- reverse <$> ask
                 case mi of 
@@ -66,13 +66,13 @@ indexNm x = do  mi <- elemIndex x <$> reversedCtxNames
 
 -- error when x is not in ctx
 -- calling reverse every time is not efficient - refactor later
-indexNmWith :: Monad m => Constraint -> Nm -> ReaderT Ctx m Int
+-- indexNmWith :: Monad m => Constraint -> Nm -> ReaderT Ctx m Int
 indexNmWith sigma x = P.rep sigma <$> indexNm x
 
-joinNm :: MonadPlus m => Nm -> Nm -> ReaderT Ctx m Constraint
+-- joinNm :: MonadPlus m => Nm -> Nm -> ReaderT Ctx m Constraint
 joinNm x y = respectful =<< joinElems <$> indexNm x <*> indexNm y <*> pure P.discrete
 
-joinTm :: MonadPlus m => Tm -> Tm -> ReaderT Ctx m Constraint
+-- joinTm :: MonadPlus m => Tm -> Tm -> ReaderT Ctx m Constraint
 joinTm (Var x) (Var y) = joinNm x y
 
 joinParts = respectful . fromSets . concatMap nontrivialSets
@@ -104,8 +104,8 @@ subs ctx sigma = substs [(x, Var y) | i <-[0..length ns-1],
 sone  p = _one  p
 soneb p = _oneb p
 
-_one = memo ((fmap (fmap simplify) <$>) . one)
-_oneb = memo ((fmap (fmap simplify) <$>) . oneb)
+_one = umemo ((fmap (fmap simplify) <$>) . one)
+_oneb = umemo ((fmap (fmap simplify) <$>) . oneb)
 
 one (Out x y p) = return (P.empty,(Up x y,p))
 one (TauP p)    = return (P.empty,(Tau,p))
